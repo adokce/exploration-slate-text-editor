@@ -67,12 +67,13 @@ const MyEditor = () => {
       <MyToolbar />
 
       <Editable
+        // readOnly={true}
         className={styles.editable}
         renderElement={renderElement}
         renderLeaf={renderLeaf}
         placeholder="Enter a note…"
         spellCheck
-        autoFocus
+        // autoFocus
         onKeyDown={(event) => {
           // linkifyOnKeyDown(event, editor);
 
@@ -241,7 +242,14 @@ const Element = ({ attributes, children, element }) => {
     //   return editor.linkElementType({ attributes, children, element });
     case "link":
       return (
-        <a href={element.url} {...attributes} style={{ color: "red" }}>
+        <a
+          //
+          {...attributes}
+          href={element.url}
+          style={{ color: "red" }}
+          target="_blank"
+          rel="noreferrer"
+        >
           {children}
         </a>
       );
@@ -406,15 +414,10 @@ export function identifyLinksInTextIfAny(editor) {
   const startPointOfLastCharacter = Editor.before(editor, editor.selection, {
     unit: "character"
   });
-  console.log({
-    editor,
-    startPointOfLastCharacter,
-    cursorPoint
-  });
 
   const lastCharacter = Editor.string(
     editor,
-    Editor.range(editor, startPointOfLastCharacter, cursorPoint) || null
+    Editor.range(editor, startPointOfLastCharacter, cursorPoint)
   );
 
   if (lastCharacter !== " ") {
@@ -430,12 +433,9 @@ export function identifyLinksInTextIfAny(editor) {
     edge: "start"
   });
 
-  console.log("2", {
-    start,
-    end,
-    startOfTextNode,
-    startPointOfLastCharacter
-  });
+  if (!startPointOfLastCharacter) {
+    return;
+  }
 
   while (
     Editor.string(editor, Editor.range(editor, start, end)) !== " " &&
