@@ -1,11 +1,5 @@
-import React, { forwardRef, useCallback, useMemo } from "react";
-import {
-  Editable,
-  withReact,
-  useSlate,
-  Slate,
-  useSlateStatic
-} from "slate-react";
+import React, { forwardRef, useCallback, useMemo, useState } from "react";
+import { Editable, withReact, useSlate, Slate } from "slate-react";
 import {
   Editor,
   Transforms,
@@ -19,44 +13,26 @@ import { withHistory } from "slate-history";
 import isHotkey from "is-hotkey";
 import styles from "./app.module.scss";
 import cn from "classnames";
-// import {
-//   onKeyDown as linkifyOnKeyDown,
-//   withLinkify
-// } from "@mercuriya/slate-linkify";
-// import Link from "./Link";
 import isUrl from "is-url";
-
-// const plugins = [Link()];
+import { jsx } from "slate-hyperscript";
 
 export default function App() {
   return <MyEditor />;
 }
 
 const MyEditor = () => {
+  const [isEditing, setIsEditing] = useState(false);
   const renderElement = useCallback((props) => <Element {...props} />, []);
   const renderLeaf = useCallback((props) => <Leaf {...props} />, []);
   const editor = useMemo(
-    () =>
-      withHistory(
-        //
-        // withLinkify(
-        withReact(createEditor())
-        //
-        //   {
-        //     // slate-linkify options
-        //     renderComponent: (props) => (
-        //       <a style={{ color: "red" }} {...props} />
-        //     )
-        //   }
-        // )
-      ),
+    () => withHtml(withHistory(withReact(createEditor()))),
     []
   );
   editor.isInline = (element) => ["link"].includes(element.type);
 
   const handleChange = useCallback(
     (document) => {
-      console.log({ document });
+      console.log({ document: JSON.stringify(document) });
       identifyLinksInTextIfAny(editor);
     },
     [editor]
@@ -67,7 +43,7 @@ const MyEditor = () => {
       <MyToolbar />
 
       <Editable
-        // readOnly={true}
+        readOnly={!isEditing}
         className={styles.editable}
         renderElement={renderElement}
         renderLeaf={renderLeaf}
@@ -75,8 +51,6 @@ const MyEditor = () => {
         spellCheck
         // autoFocus
         onKeyDown={(event) => {
-          // linkifyOnKeyDown(event, editor);
-
           for (const hotkey in HOTKEYS) {
             if (isHotkey(hotkey, event)) {
               event.preventDefault();
@@ -86,6 +60,15 @@ const MyEditor = () => {
           }
         }}
       />
+
+      <button
+        type="button"
+        onClick={() => {
+          setIsEditing((value) => !value);
+        }}
+      >
+        Toggle edit
+      </button>
     </Slate>
   );
 };
@@ -321,19 +304,7 @@ const isMarkActive = (editor, format) => {
   return marks ? marks[format] === true : false;
 };
 
-const initialValue = [
-  {
-    type: "paragraph",
-    children: [
-      { text: "Some text before a link." },
-      {
-        type: "link",
-        url: "https://www.google.com",
-        children: [{ text: "https://www.google.com" }]
-        // children: [{ text: "Link text" }]
-      }
-    ]
-  },
+const initialValue1 = [
   {
     type: "paragraph",
     children: [{ text: "" }]
@@ -344,37 +315,75 @@ const initialValue2 = [
   {
     type: "paragraph",
     children: [
-      { text: "This is editable " },
-      { text: "rich", bold: true },
-      { text: " text, " },
-      { text: "much", italic: true },
-      { text: " better than a " },
-      { text: "<textarea>", code: true },
-      { text: "!" }
+      { text: "This is editable text where you can type links in " },
+      { text: "something something haha", bold: true },
+      { text: " and more something yeah, " },
+      { text: "lalallalalala joj joj", italic: true },
+      { text: " super je ovo " }
     ]
   },
   {
     type: "paragraph",
     children: [
       {
-        text:
-          "Since it's rich text, you can do things like turn a selection of text "
+        text: "Soomething is here also  "
       },
       { text: "bold", bold: true },
       {
-        text:
-          ", or add a semantically rendered block quote in the middle of the page, like this:"
+        text: ", oooo aaa eee aaeoeaoao"
       }
     ]
   },
   {
-    type: "block-quote",
-    children: [{ text: "A wise quote." }]
+    type: "paragraph",
+    children: [
+      { text: "Try it out for yourself! " },
+      {
+        type: "link",
+
+        url: "https://google.com",
+        text: "https://google.com "
+      }
+    ]
+  }
+];
+
+const initialValue = [
+  {
+    type: "paragraph",
+    children: [
+      { text: "This is editable text where you can type links in " },
+      { text: "something something haha", bold: true },
+      { text: " and more something yeah, " },
+      { text: "lalallalalala joj joj", italic: true },
+      { text: " super je ovo " }
+    ]
   },
   {
     type: "paragraph",
-    align: "center",
-    children: [{ text: "Try it out for yourself!" }]
+    children: [
+      { text: "Soomething is here also  " },
+      { text: "bold", bold: true },
+      { text: ", oooo aaa eee aaeoeaoao" }
+    ]
+  },
+  {
+    type: "paragraph",
+    children: [
+      { text: "Try it out for yourself! " },
+      {
+        type: "link",
+        url: "https://google.com",
+        children: [
+          {
+            type: "link",
+            url: "https://google.com",
+            text: "https://google.com"
+          }
+        ]
+      },
+      { type: "link", url: "https://google.com", text: " " }
+    ]
   }
 ];
 
@@ -415,10 +424,16 @@ export function identifyLinksInTextIfAny(editor) {
     unit: "character"
   });
 
-  const lastCharacter = Editor.string(
-    editor,
-    Editor.range(editor, startPointOfLastCharacter, cursorPoint)
-  );
+  // if (!startPointOfLastCharacter) {
+  //   return;
+  // }
+  let lastCharacter = null;
+  try {
+    lastCharacter = Editor.string(
+      editor,
+      Editor.range(editor, startPointOfLastCharacter, cursorPoint)
+    );
+  } catch (e) {}
 
   if (lastCharacter !== " ") {
     return;
@@ -433,16 +448,19 @@ export function identifyLinksInTextIfAny(editor) {
     edge: "start"
   });
 
-  if (!startPointOfLastCharacter) {
-    return;
-  }
-
   while (
     Editor.string(editor, Editor.range(editor, start, end)) !== " " &&
     !Point.isBefore(start, startOfTextNode)
   ) {
     end = start;
-    start = Editor.before(editor, end, { unit: "character" });
+
+    const lala = Editor.before(editor, end, { unit: "character" });
+
+    if (!lala) {
+      continue;
+    }
+
+    start = lala;
   }
 
   const lastWordRange = Editor.range(editor, end, startPointOfLastCharacter);
@@ -458,3 +476,99 @@ export function identifyLinksInTextIfAny(editor) {
     });
   }
 }
+
+const withHtml = (editor) => {
+  const { insertData, isInline, isVoid } = editor;
+
+  editor.isInline = (element) => {
+    return element.type === "link" ? true : isInline(element);
+  };
+
+  editor.isVoid = (element) => {
+    return element.type === "image" ? true : isVoid(element);
+  };
+
+  editor.insertData = (data) => {
+    const html = data.getData("text/html");
+
+    if (html) {
+      const parsed = new DOMParser().parseFromString(html, "text/html");
+      const fragment = deserialize(parsed.body);
+      Transforms.insertFragment(editor, fragment);
+      return;
+    }
+
+    insertData(data);
+  };
+
+  return editor;
+};
+
+export const deserialize = (el) => {
+  if (el.nodeType === 3) {
+    return el.textContent;
+  } else if (el.nodeType !== 1) {
+    return null;
+  } else if (el.nodeName === "BR") {
+    return "\n";
+  }
+
+  const { nodeName } = el;
+  let parent = el;
+
+  if (
+    nodeName === "PRE" &&
+    el.childNodes[0] &&
+    el.childNodes[0].nodeName === "CODE"
+  ) {
+    parent = el.childNodes[0];
+  }
+  let children = Array.from(parent.childNodes).map(deserialize).flat();
+
+  if (children.length === 0) {
+    children = [{ text: "" }];
+  }
+
+  if (el.nodeName === "BODY") {
+    return jsx("fragment", {}, children);
+  }
+
+  if (ELEMENT_TAGS[nodeName]) {
+    const attrs = ELEMENT_TAGS[nodeName](el);
+    return jsx("element", attrs, children);
+  }
+
+  if (TEXT_TAGS[nodeName]) {
+    const attrs = TEXT_TAGS[nodeName](el);
+    return children.map((child) => jsx("text", attrs, child));
+  }
+
+  return children;
+};
+
+const ELEMENT_TAGS = {
+  A: (el) => ({ type: "link", url: el.getAttribute("href") }),
+  // BLOCKQUOTE: () => ({ type: "quote" }),
+  // H1: () => ({ type: "heading-one" }),
+  // H2: () => ({ type: "heading-two" }),
+  // H3: () => ({ type: "heading-three" }),
+  // H4: () => ({ type: "heading-four" }),
+  // H5: () => ({ type: "heading-five" }),
+  // H6: () => ({ type: "heading-six" }),
+  // IMG: (el) => ({ type: "image", url: el.getAttribute("src") }),
+  LI: () => ({ type: "list-item" }),
+  OL: () => ({ type: "numbered-list" }),
+  P: () => ({ type: "paragraph" }),
+  // PRE: () => ({ type: "code" }),
+  UL: () => ({ type: "bulleted-list" })
+};
+
+const TEXT_TAGS = {
+  // CODE: () => ({ code: true }),
+  // DEL: () => ({ strikethrough: true }),
+  EM: () => ({ italic: true }),
+  I: () => ({ italic: true }),
+  S: () => ({ strikethrough: true }),
+  STRONG: () => ({ bold: true }),
+  U: () => ({ underline: true })
+};
