@@ -1,0 +1,42 @@
+.menu {
+  & > * {
+    display: inline-block;
+  }
+  & > * + * {
+    margin-left: 15px;
+  }
+}
+
+.toolbar {
+  position: relative;
+  padding: 1px 18px 17px;
+  margin: 0 -20px;
+  border-bottom: 2px solid #eee;
+  margin-bottom: 20px;
+}
+
+.editable {
+  border: 2px solid #7A7C84;
+  font-family: serif;
+  border-radius: 6px;
+  
+  padding-left:16px;
+  padding-right: 16px;
+}
+
+.button {
+
+  cursor: pointer;
+  // color: ${reversed
+  //   ? active
+  //     ? 'white'
+  //     : '#aaa'
+  //   : active
+  //   ? 'black'
+  //   : '#ccc'};
+}
+
+.icon {
+  font-size: 18px;
+  vertical-align: text-bottom;
+}
