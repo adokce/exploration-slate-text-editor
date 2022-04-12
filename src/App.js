@@ -1,28 +1,69 @@
 import React, { forwardRef, useCallback, useMemo } from "react";
-import { Editable, withReact, useSlate, Slate } from "slate-react";
+import {
+  Editable,
+  withReact,
+  useSlate,
+  Slate,
+  useSlateStatic
+} from "slate-react";
 import {
   Editor,
   Transforms,
   createEditor,
-  Element as SlateElement
+  Element as SlateElement,
+  Range,
+  Text,
+  Point
 } from "slate";
 import { withHistory } from "slate-history";
 import isHotkey from "is-hotkey";
 import styles from "./app.module.scss";
 import cn from "classnames";
+// import {
+//   onKeyDown as linkifyOnKeyDown,
+//   withLinkify
+// } from "@mercuriya/slate-linkify";
+// import Link from "./Link";
+import isUrl from "is-url";
+
+// const plugins = [Link()];
 
 export default function App() {
   return <MyEditor />;
 }
 
-// Editor
 const MyEditor = () => {
   const renderElement = useCallback((props) => <Element {...props} />, []);
   const renderLeaf = useCallback((props) => <Leaf {...props} />, []);
-  const editor = useMemo(() => withHistory(withReact(createEditor())), []);
+  const editor = useMemo(
+    () =>
+      withHistory(
+        //
+        // withLinkify(
+        withReact(createEditor())
+        //
+        //   {
+        //     // slate-linkify options
+        //     renderComponent: (props) => (
+        //       <a style={{ color: "red" }} {...props} />
+        //     )
+        //   }
+        // )
+      ),
+    []
+  );
+  editor.isInline = (element) => ["link"].includes(element.type);
+
+  const handleChange = useCallback(
+    (document) => {
+      console.log({ document });
+      identifyLinksInTextIfAny(editor);
+    },
+    [editor]
+  );
 
   return (
-    <Slate editor={editor} value={initialValue}>
+    <Slate editor={editor} value={initialValue} onChange={handleChange}>
       <MyToolbar />
 
       <Editable
@@ -33,6 +74,8 @@ const MyEditor = () => {
         spellCheck
         autoFocus
         onKeyDown={(event) => {
+          // linkifyOnKeyDown(event, editor);
+
           for (const hotkey in HOTKEYS) {
             if (isHotkey(hotkey, event)) {
               event.preventDefault();
@@ -190,8 +233,18 @@ export const Icon = React.forwardRef(({ className, ...props }, ref) => (
 ));
 
 const Element = ({ attributes, children, element }) => {
+  // const editor = useSlateStatic();
   const style = { textAlign: element.align };
+
   switch (element.type) {
+    // case "link":
+    //   return editor.linkElementType({ attributes, children, element });
+    case "link":
+      return (
+        <a href={element.url} {...attributes} style={{ color: "red" }}>
+          {children}
+        </a>
+      );
     case "block-quote":
       return (
         <blockquote style={style} {...attributes}>
@@ -203,18 +256,6 @@ const Element = ({ attributes, children, element }) => {
         <ul style={style} {...attributes}>
           {children}
         </ul>
-      );
-    case "heading-one":
-      return (
-        <h1 style={style} {...attributes}>
-          {children}
-        </h1>
-      );
-    case "heading-two":
-      return (
-        <h2 style={style} {...attributes}>
-          {children}
-        </h2>
       );
     case "list-item":
       return (
@@ -275,6 +316,18 @@ const isMarkActive = (editor, format) => {
 const initialValue = [
   {
     type: "paragraph",
+    children: [
+      { text: "Some text before a link." },
+      {
+        type: "link",
+        url: "https://www.google.com",
+        children: [{ text: "https://www.google.com" }]
+        // children: [{ text: "Link text" }]
+      }
+    ]
+  },
+  {
+    type: "paragraph",
     children: [{ text: "" }]
   }
 ];
@@ -325,3 +378,83 @@ const HOTKEYS = {
 };
 
 const LIST_TYPES = ["numbered-list", "bulleted-list"];
+
+export function identifyLinksInTextIfAny(editor) {
+  // if selection is not collapsed, we do not proceed with the link
+  // detection
+  if (editor.selection == null || !Range.isCollapsed(editor.selection)) {
+    return;
+  }
+
+  const [node, _] = Editor.parent(editor, editor.selection);
+
+  // if we are already inside a link, exit early.
+  if (node.type === "link") {
+    return;
+  }
+
+  const [currentNode, currentNodePath] = Editor.node(editor, editor.selection);
+
+  // if we are not inside a text node, exit early.
+  if (!Text.isText(currentNode)) {
+    return;
+  }
+
+  let [start] = Range.edges(editor.selection);
+  const cursorPoint = start;
+
+  const startPointOfLastCharacter = Editor.before(editor, editor.selection, {
+    unit: "character"
+  });
+  console.log({
+    editor,
+    startPointOfLastCharacter,
+    cursorPoint
+  });
+
+  const lastCharacter = Editor.string(
+    editor,
+    Editor.range(editor, startPointOfLastCharacter, cursorPoint) || null
+  );
+
+  if (lastCharacter !== " ") {
+    return;
+  }
+
+  let end = startPointOfLastCharacter;
+  start = Editor.before(editor, end, {
+    unit: "character"
+  });
+
+  const startOfTextNode = Editor.point(editor, currentNodePath, {
+    edge: "start"
+  });
+
+  console.log("2", {
+    start,
+    end,
+    startOfTextNode,
+    startPointOfLastCharacter
+  });
+
+  while (
+    Editor.string(editor, Editor.range(editor, start, end)) !== " " &&
+    !Point.isBefore(start, startOfTextNode)
+  ) {
+    end = start;
+    start = Editor.before(editor, end, { unit: "character" });
+  }
+
+  const lastWordRange = Editor.range(editor, end, startPointOfLastCharacter);
+  const lastWord = Editor.string(editor, lastWordRange);
+
+  if (isUrl(lastWord)) {
+    Promise.resolve().then(() => {
+      Transforms.wrapNodes(
+        editor,
+        { type: "link", url: lastWord, children: [{ text: lastWord }] },
+        { split: true, at: lastWordRange }
+      );
+    });
+  }
+}
